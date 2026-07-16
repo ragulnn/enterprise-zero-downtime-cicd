@@ -4,6 +4,10 @@ __pycache__/
 .venv/
 venv/
 
+# Virtual Environment
+.venv/
+venv/
+
 # Terraform
 .terraform/
 terraform.tfstate
