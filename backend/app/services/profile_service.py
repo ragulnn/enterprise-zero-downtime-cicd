@@ -1,5 +1,4 @@
-from app.backend.models.profile import Profile
-
+from app.models.profile import Profile
 
 def get_profile() -> Profile:
     return Profile(

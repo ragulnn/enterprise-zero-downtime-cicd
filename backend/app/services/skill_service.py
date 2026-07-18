@@ -1,4 +1,4 @@
-from app.backend.models.skill import Skill
+from app.models.skill import Skill
 
 
 def get_skills():
