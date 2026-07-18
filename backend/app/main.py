@@ -4,10 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.profile import router as profile_router
 from app.api.skills import router as skills_router
 
+from app.core.config import settings
+from app.api.system import router as system_router
+
+
 app = FastAPI(
-    title="Enterprise Portfolio API",
-    version="1.0.0"
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,7 +21,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.include_router(system_router)
 app.include_router(profile_router)
 app.include_router(skills_router)
 
