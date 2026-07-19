@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: dev-cicd
 
 variables:
   imageRepository: 'enterprise-backend'
