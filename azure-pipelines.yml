@@ -6,7 +6,7 @@ pool:
 
 variables:
   imageRepository: 'enterprise-backend'
-  dockerRegistryServiceConnection: 'ragulm175acr'
+  dockerRegistryServiceConnection: 'ragulm175acr-7512'
   dockerfilePath: 'backend/Dockerfile'
   tag: '$(Build.BuildId)'
 
