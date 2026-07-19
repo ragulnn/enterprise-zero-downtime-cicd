@@ -1,0 +1,26 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageRepository: 'enterprise-backend'
+  dockerRegistryServiceConnection: 'ragulm175acr'
+  dockerfilePath: 'backend/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+steps:
+- checkout: self
+
+- task: Docker@2
+  displayName: Build Docker Image
+  inputs:
+    command: build
+    repository: $(imageRepository)
+    dockerfile: backend/Dockerfile
+    containerRegistry: $(dockerRegistryServiceConnection)
+    buildContext: backend
+    tags: |
+      $(tag)
+      latest
