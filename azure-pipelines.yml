@@ -7,12 +7,30 @@ pool:
 variables:
   imageRepository: 'enterprise-backend'
   dockerRegistryServiceConnection: 'ragulm175acr-7512'
-  dockerfilePath: 'backend/Dockerfile'
   tag: '$(Build.BuildId)'
 
 steps:
 - checkout: self
 
+# Prepare SonarQube
+- task: SonarQubePrepare@7
+  inputs:
+    SonarQube: 'sonarqube-local'
+    scannerMode: 'CLI'
+    configMode: 'manual'
+    cliProjectKey: 'enterprise-zero-downtime-cicd'
+    cliProjectName: 'enterprise-zero-downtime-cicd'
+    cliSources: 'backend'
+
+# Run SonarQube Analysis
+- task: SonarQubeAnalyze@7
+
+# Publish Quality Gate
+- task: SonarQubePublish@7
+  inputs:
+    pollingTimeoutSec: '300'
+
+# Docker Build & Push
 - task: Docker@2
   displayName: Build and Push Docker Image
   inputs:
