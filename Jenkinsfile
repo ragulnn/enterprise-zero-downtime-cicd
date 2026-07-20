@@ -69,6 +69,24 @@ pipeline {
             }
         }
 
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate(abortPipeline: false)
+
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted because Quality Gate failed: ${qg.status}"
+                        }
+
+                        echo "======================================"
+                        echo " SonarQube Quality Gate PASSED"
+                        echo "======================================"
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh '''
@@ -152,7 +170,7 @@ pipeline {
 
                 echo ""
 
-                echo "===== Service ====="
+                echo "===== Services ====="
 
                 kubectl get svc -n ${K8S_NAMESPACE}
 
@@ -168,7 +186,10 @@ pipeline {
 
         stage('List Docker Images') {
             steps {
-                sh 'docker images'
+                sh '''
+                echo "===== Local Docker Images ====="
+                docker images
+                '''
             }
         }
     }
@@ -177,30 +198,39 @@ pipeline {
 
         success {
             echo '''
-==========================================
- PIPELINE COMPLETED SUCCESSFULLY
-==========================================
+======================================================
+        ENTERPRISE CI/CD PIPELINE SUCCESS
+======================================================
 
-Application Built
-Docker Image Created
-Image Pushed to ACR
-Deployment Updated
-Rollout Successful
+✓ Source Code Checked Out
+✓ Environment Verified
+✓ SonarQube Analysis Completed
+✓ Quality Gate Passed
+✓ Docker Image Built
+✓ Image Pushed to Azure Container Registry
+✓ Kubernetes Deployment Updated
+✓ Rollout Successful
 
-==========================================
+======================================================
 '''
         }
 
         failure {
             sh '''
-            echo "===== Deployment Debug ====="
+            echo "===== Kubernetes Debug ====="
 
             kubectl get pods -n enterprise || true
+
+            echo ""
 
             kubectl describe deployment enterprise-backend -n enterprise || true
             '''
 
-            echo "Pipeline Failed"
+            echo '''
+======================================================
+        PIPELINE FAILED
+======================================================
+'''
         }
 
         always {
