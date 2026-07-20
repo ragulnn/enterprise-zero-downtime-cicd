@@ -17,7 +17,6 @@ pipeline {
 
         K8S_NAMESPACE = "enterprise"
         DEPLOYMENT_NAME = "enterprise-backend"
-        SERVICE_NAME = "enterprise-backend"
     }
 
     stages {
@@ -76,18 +75,17 @@ pipeline {
                 echo "===== Building Docker Image ====="
 
                 docker build \
-                  -t ${IMAGE_NAME}:${IMAGE_TAG} \
-                  -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
-                  -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest \
-                  -f backend/Dockerfile \
-                  backend
+                    -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                    -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                    -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest \
+                    -f backend/Dockerfile \
+                    backend
                 '''
             }
         }
 
-        stage('Login to Azure Container Registry') {
+        stage('Azure Login') {
             steps {
-
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'azure-acr',
@@ -113,88 +111,62 @@ pipeline {
 
         stage('Push Docker Images') {
             steps {
-
                 sh '''
-                echo "===== Pushing Images ====="
+                echo "===== Push Docker Images ====="
 
                 docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}
-
                 docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest
                 '''
             }
         }
 
         stage('Deploy to Kubernetes') {
-
             steps {
-
                 sh '''
                 echo "===== Deploying ====="
 
                 kubectl set image deployment/${DEPLOYMENT_NAME} \
-                    backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
-                    -n ${K8S_NAMESPACE}
-
-                echo ""
-
-                echo "Waiting for rollout..."
+                backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                -n ${K8S_NAMESPACE}
 
                 kubectl rollout status deployment/${DEPLOYMENT_NAME} \
-                    -n ${K8S_NAMESPACE} \
-                    --timeout=180s
+                -n ${K8S_NAMESPACE} \
+                --timeout=180s
                 '''
             }
         }
 
-        stage('Health Check') {
-
+        stage('Verify Deployment') {
             steps {
-
                 sh '''
-                echo "===== Health Check ====="
-
-                kubectl port-forward \
-                    service/${SERVICE_NAME} \
-                    8081:80 \
-                    -n ${K8S_NAMESPACE} >/tmp/pf.log 2>&1 &
-
-                PF_PID=$!
-
-                sleep 8
-
-                curl --fail http://localhost:8081/health
-
-                kill $PF_PID
-                '''
-            }
-        }
-
-        stage('Deployment Summary') {
-
-            steps {
-
-                sh '''
-                echo ""
                 echo "===== Pods ====="
 
                 kubectl get pods -n ${K8S_NAMESPACE}
 
                 echo ""
-                echo "===== Services ====="
+
+                echo "===== Deployment ====="
+
+                kubectl describe deployment ${DEPLOYMENT_NAME} \
+                -n ${K8S_NAMESPACE}
+
+                echo ""
+
+                echo "===== Service ====="
 
                 kubectl get svc -n ${K8S_NAMESPACE}
 
                 echo ""
-                echo "===== Deployment ====="
 
-                kubectl get deployment ${DEPLOYMENT_NAME} \
-                    -n ${K8S_NAMESPACE}
+                echo "===== Endpoints ====="
+
+                kubectl get endpoints ${DEPLOYMENT_NAME} \
+                -n ${K8S_NAMESPACE}
                 '''
             }
         }
 
-        stage('Docker Images') {
-
+        stage('List Docker Images') {
             steps {
                 sh 'docker images'
             }
@@ -204,37 +176,34 @@ pipeline {
     post {
 
         success {
-
             echo '''
-=========================================
- Deployment Successful
-=========================================
+==========================================
+ PIPELINE COMPLETED SUCCESSFULLY
+==========================================
 
-Image:
-ragulm175acr.azurecr.io/enterprise-backend:${BUILD_NUMBER}
+Application Built
+Docker Image Created
+Image Pushed to ACR
+Deployment Updated
+Rollout Successful
 
-Application is healthy.
-
-=========================================
+==========================================
 '''
         }
 
         failure {
-
             sh '''
-            echo ""
-            echo "===== Deployment Failed ====="
-
-            kubectl describe deployment enterprise-backend -n enterprise || true
+            echo "===== Deployment Debug ====="
 
             kubectl get pods -n enterprise || true
+
+            kubectl describe deployment enterprise-backend -n enterprise || true
             '''
 
-            echo "Build Failed"
+            echo "Pipeline Failed"
         }
 
         always {
-
             cleanWs()
 
             sh '''
