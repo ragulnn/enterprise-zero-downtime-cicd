@@ -22,6 +22,7 @@ pipeline {
                 sh '''
                 whoami
                 docker --version
+                kubectl version --client
                 az --version
                 '''
             }
@@ -50,6 +51,8 @@ pipeline {
                 sh '''
                 docker build \
                 -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest \
                 -f backend/Dockerfile \
                 backend
                 '''
@@ -75,20 +78,26 @@ pipeline {
             }
         }
 
-        stage('Tag Docker Image') {
-            steps {
-                sh '''
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest
-                '''
-            }
-        }
-
         stage('Push Docker Image') {
             steps {
                 sh '''
                 docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}
                 docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                kubectl set image deployment/enterprise-backend \
+                backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                -n enterprise
+
+                kubectl rollout status deployment/enterprise-backend \
+                -n enterprise --timeout=180s
+
+                kubectl get pods -n enterprise
                 '''
             }
         }
