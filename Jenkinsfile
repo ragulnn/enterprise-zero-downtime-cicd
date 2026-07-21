@@ -174,30 +174,29 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
+        stage('Application Smoke Test') {
             steps {
                 sh '''
                 set -e
 
-                echo "===== Application Health Check ====="
+                echo "=================================="
+                echo "APPLICATION SMOKE TEST"
+                echo "=================================="
 
-                kubectl port-forward svc/${SERVICE_NAME} 8000:80 \
-                    -n ${K8S_NAMESPACE} >/tmp/portforward.log 2>&1 &
-
-                PF_PID=$!
-
-                sleep 8
-
-                curl --fail http://localhost:8000/health
-
-                kill $PF_PID || true
+                curl --retry 10 \
+                     --retry-delay 3 \
+                     --retry-connrefused \
+                     --fail \
+                     -H "Host: portfolio.local" \
+                     http://localhost:9090/api/profile
 
                 echo ""
-                echo "Application is Healthy"
+                echo "=================================="
+                echo "APPLICATION IS HEALTHY"
+                echo "=================================="
                 '''
             }
         }
-
         stage('Verify Deployment') {
             steps {
                 sh '''
