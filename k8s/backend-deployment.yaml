@@ -18,8 +18,6 @@ spec:
         app: enterprise-backend
 
     spec:
-      imagePullSecrets:
-        - name: acr-secret
 
       containers:
         - name: backend

@@ -171,12 +171,16 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy to AKS') {
             steps {
                 sh '''
                 set -e
 
-                echo "===== Deploying Application ====="
+                echo "=================================="
+                echo "DEPLOYING TO AZURE AKS"
+                echo "=================================="
+
+                kubectl config current-context
 
                 kubectl set image deployment/${DEPLOYMENT_NAME} \
                     backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
@@ -184,11 +188,12 @@ pipeline {
 
                 kubectl rollout status deployment/${DEPLOYMENT_NAME} \
                     -n ${K8S_NAMESPACE} \
-                    --timeout=180s
+                    --timeout=300s
+
+                kubectl get pods -n ${K8S_NAMESPACE}
                 '''
             }
         }
-
         stage('Application Smoke Test') {
             steps {
                 sh '''
@@ -198,12 +203,11 @@ pipeline {
                 echo "APPLICATION SMOKE TEST"
                 echo "=================================="
 
-                curl --retry 10 \
-                     --retry-delay 3 \
-                     --retry-connrefused \
-                     --fail \
-                     -H "Host: portfolio.local" \
-                     http://localhost:9090/api/profile
+                kubectl run smoke-test \
+                    --rm -i \
+                    --restart=Never \
+                    --image=curlimages/curl:latest \
+                    -- curl http://enterprise-backend/api/profile
 
                 echo ""
                 echo "=================================="
@@ -216,14 +220,19 @@ pipeline {
             steps {
                 sh '''
                 echo ""
+                echo "===== Kubernetes Context ====="
+
+                kubectl config current-context
+
+                echo ""
                 echo "===== Pods ====="
 
-                kubectl get pods -n ${K8S_NAMESPACE}
+                kubectl get pods -n ${K8S_NAMESPACE} -o wide
 
                 echo ""
                 echo "===== Deployment ====="
 
-                kubectl describe deployment ${DEPLOYMENT_NAME} \
+                kubectl get deployment ${DEPLOYMENT_NAME} \
                     -n ${K8S_NAMESPACE}
 
                 echo ""
@@ -232,19 +241,17 @@ pipeline {
                 kubectl get svc -n ${K8S_NAMESPACE}
 
                 echo ""
-                echo "===== Endpoints ====="
-
-                kubectl get endpoints ${SERVICE_NAME} \
-                    -n ${K8S_NAMESPACE}
-
-                echo ""
                 echo "===== Ingress ====="
 
                 kubectl get ingress -n ${K8S_NAMESPACE}
+
+                echo ""
+                echo "===== Nodes ====="
+
+                kubectl get nodes
                 '''
             }
         }
-
         stage('List Docker Images') {
             steps {
                 sh '''
@@ -321,7 +328,7 @@ pipeline {
             cleanWs()
 
             sh '''
-            docker image prune -f || true
+            docker system prune -af --volumes || true
 
             az logout || true
             '''
