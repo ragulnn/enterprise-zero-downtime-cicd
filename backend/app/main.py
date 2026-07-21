@@ -6,13 +6,13 @@ from app.api.skills import router as skills_router
 
 from app.core.config import settings
 from app.api.system import router as system_router
-
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
 )
-
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,

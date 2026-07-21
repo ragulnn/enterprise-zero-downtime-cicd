@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: enterprise-backend
+  namespace: enterprise
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: enterprise-backend
+
+  template:
+    metadata:
+      labels:
+        app: enterprise-backend
+
+    spec:
+      imagePullSecrets:
+        - name: acr-secret
+
+      containers:
+        - name: backend
+          image: ragulm175acr.azurecr.io/enterprise-backend:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8000
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
