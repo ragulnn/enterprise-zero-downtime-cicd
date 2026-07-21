@@ -46,19 +46,29 @@ pipeline {
 
                 echo ""
                 kubectl version --client
-                kubectl config current-context
 
                 echo ""
-                az --version
+                echo "===== Kubernetes Context ====="
+
+                CURRENT_CONTEXT=$(kubectl config current-context)
+
+                echo "Current Context: $CURRENT_CONTEXT"
+
+                if [ "$CURRENT_CONTEXT" != "enterprise-aks" ]; then
+                    echo "ERROR: Jenkins is NOT connected to AKS!"
+                    exit 1
+                fi
 
                 echo ""
                 echo "===== Kubernetes Nodes ====="
 
                 kubectl get nodes
+
+                echo ""
+                az --version
                 '''
             }
         }
-
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -206,8 +216,9 @@ pipeline {
                 kubectl run smoke-test \
                     --rm -i \
                     --restart=Never \
+                    --namespace ${K8S_NAMESPACE} \
                     --image=curlimages/curl:latest \
-                    -- curl http://enterprise-backend/api/profile
+                    -- curl http://${SERVICE_NAME}/api/profile
 
                 echo ""
                 echo "=================================="
