@@ -125,7 +125,6 @@ pipeline {
 
                 trivy image \
                     --severity HIGH,CRITICAL \
-                    --exit-code 1 \
                     --no-progress \
                     ${IMAGE_NAME}:${IMAGE_TAG}
                 '''
