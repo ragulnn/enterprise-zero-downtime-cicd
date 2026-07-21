@@ -17,6 +17,7 @@ pipeline {
 
         K8S_NAMESPACE = "enterprise"
         DEPLOYMENT_NAME = "enterprise-backend"
+        SERVICE_NAME = "enterprise-backend"
     }
 
     stages {
@@ -31,15 +32,23 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 sh '''
-                echo "===== Environment ====="
+                set -e
+
+                echo "=================================="
+                echo "VERIFYING BUILD ENVIRONMENT"
+                echo "=================================="
 
                 whoami
                 pwd
 
+                echo ""
                 docker --version
+
+                echo ""
                 kubectl version --client
                 kubectl config current-context
 
+                echo ""
                 az --version
 
                 echo ""
@@ -73,14 +82,16 @@ pipeline {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
                     script {
+
                         def qg = waitForQualityGate(abortPipeline: false)
 
                         if (qg.status != 'OK') {
                             error "Pipeline aborted because Quality Gate failed: ${qg.status}"
                         }
 
+                        echo ""
                         echo "======================================"
-                        echo " SonarQube Quality Gate PASSED"
+                        echo "SONARQUBE QUALITY GATE PASSED"
                         echo "======================================"
                     }
                 }
@@ -90,6 +101,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                set -e
+
                 echo "===== Building Docker Image ====="
 
                 docker build \
@@ -104,6 +117,7 @@ pipeline {
 
         stage('Azure Login') {
             steps {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'azure-acr',
@@ -113,13 +127,15 @@ pipeline {
                 ]) {
 
                     sh '''
+                    set -e
+
                     echo "===== Azure Login ====="
 
                     az login \
-                      --service-principal \
-                      -u $AZURE_CLIENT_ID \
-                      -p $AZURE_CLIENT_SECRET \
-                      --tenant b39b5cae-d7a4-4c51-a131-f33d7b6fa7f9
+                        --service-principal \
+                        -u $AZURE_CLIENT_ID \
+                        -p $AZURE_CLIENT_SECRET \
+                        --tenant b39b5cae-d7a4-4c51-a131-f33d7b6fa7f9
 
                     az acr login --name ${ACR_NAME}
                     '''
@@ -130,6 +146,8 @@ pipeline {
         stage('Push Docker Images') {
             steps {
                 sh '''
+                set -e
+
                 echo "===== Push Docker Images ====="
 
                 docker push ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}
@@ -141,15 +159,41 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                echo "===== Deploying ====="
+                set -e
+
+                echo "===== Deploying Application ====="
 
                 kubectl set image deployment/${DEPLOYMENT_NAME} \
-                backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
-                -n ${K8S_NAMESPACE}
+                    backend=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+                    -n ${K8S_NAMESPACE}
 
                 kubectl rollout status deployment/${DEPLOYMENT_NAME} \
-                -n ${K8S_NAMESPACE} \
-                --timeout=180s
+                    -n ${K8S_NAMESPACE} \
+                    --timeout=180s
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                set -e
+
+                echo "===== Application Health Check ====="
+
+                kubectl port-forward svc/${SERVICE_NAME} 8000:80 \
+                    -n ${K8S_NAMESPACE} >/tmp/portforward.log 2>&1 &
+
+                PF_PID=$!
+
+                sleep 8
+
+                curl --fail http://localhost:8000/health
+
+                kill $PF_PID || true
+
+                echo ""
+                echo "Application is Healthy"
                 '''
             }
         }
@@ -157,29 +201,32 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
+                echo ""
                 echo "===== Pods ====="
 
                 kubectl get pods -n ${K8S_NAMESPACE}
 
                 echo ""
-
                 echo "===== Deployment ====="
 
                 kubectl describe deployment ${DEPLOYMENT_NAME} \
-                -n ${K8S_NAMESPACE}
+                    -n ${K8S_NAMESPACE}
 
                 echo ""
-
                 echo "===== Services ====="
 
                 kubectl get svc -n ${K8S_NAMESPACE}
 
                 echo ""
-
                 echo "===== Endpoints ====="
 
-                kubectl get endpoints ${DEPLOYMENT_NAME} \
-                -n ${K8S_NAMESPACE}
+                kubectl get endpoints ${SERVICE_NAME} \
+                    -n ${K8S_NAMESPACE}
+
+                echo ""
+                echo "===== Ingress ====="
+
+                kubectl get ingress -n ${K8S_NAMESPACE}
                 '''
             }
         }
@@ -188,6 +235,7 @@ pipeline {
             steps {
                 sh '''
                 echo "===== Local Docker Images ====="
+
                 docker images
                 '''
             }
@@ -197,47 +245,71 @@ pipeline {
     post {
 
         success {
+
             echo '''
-======================================================
-        ENTERPRISE CI/CD PIPELINE SUCCESS
-======================================================
+
+==============================================================
+          ENTERPRISE ZERO-DOWNTIME CI/CD SUCCESS
+==============================================================
 
 ✓ Source Code Checked Out
-✓ Environment Verified
+
+✓ Build Environment Verified
+
 ✓ SonarQube Analysis Completed
+
 ✓ Quality Gate Passed
+
 ✓ Docker Image Built
+
 ✓ Image Pushed to Azure Container Registry
+
 ✓ Kubernetes Deployment Updated
+
 ✓ Rollout Successful
 
-======================================================
+✓ Health Check Passed
+
+✓ Deployment Verified
+
+==============================================================
+
 '''
         }
 
         failure {
+
             sh '''
             echo "===== Kubernetes Debug ====="
 
             kubectl get pods -n enterprise || true
 
             echo ""
+            kubectl describe deployment enterprise-backend \
+                -n enterprise || true
 
-            kubectl describe deployment enterprise-backend -n enterprise || true
+            echo ""
+            kubectl logs deployment/enterprise-backend \
+                -n enterprise || true
             '''
 
             echo '''
-======================================================
-        PIPELINE FAILED
-======================================================
+
+==============================================================
+                  PIPELINE FAILED
+==============================================================
+
 '''
         }
 
         always {
+
             cleanWs()
 
             sh '''
             docker image prune -f || true
+
+            az logout || true
             '''
         }
     }
