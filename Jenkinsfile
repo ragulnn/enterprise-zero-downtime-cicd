@@ -114,7 +114,23 @@ pipeline {
                 '''
             }
         }
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                set -e
 
+                echo "=================================="
+                echo "TRIVY IMAGE SECURITY SCAN"
+                echo "=================================="
+
+                trivy image \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 1 \
+                    --no-progress \
+                    ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
+            }
+        }
         stage('Azure Login') {
             steps {
 
