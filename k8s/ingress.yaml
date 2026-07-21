@@ -1,31 +1,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
-
 metadata:
   name: enterprise-ingress
   namespace: enterprise
-
 spec:
   ingressClassName: nginx
-
   rules:
-  - host: portfolio.local
-
-    http:
+  - http:
       paths:
-
       - path: /
         pathType: Prefix
-
-        backend:
-          service:
-            name: portfolio-frontend
-            port:
-              number: 80
-
-      - path: /api
-        pathType: Prefix
-
         backend:
           service:
             name: enterprise-backend
